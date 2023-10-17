@@ -1,90 +1,45 @@
 #include "stan_shell.h"
 
-/**
- * sig_handler - checks if Ctrl C is pressed
- * @sig_num: int
- */
-void sig_handler(int sig_num)
-{
-	if (sig_num == SIGINT)
-	{
-		_puts("\n#cisfun$ ");
-	}
-}
 
 /**
-* _EOF - handles the End of File
-* @len: return value of getline function
-* @buff: buffer
+ * main - entry point
+ * @ac: arg count
+ * @av: arg vector
+ *
+ * Return: 0 on success, 1 on error
  */
-void _EOF(int len, char *buff)
+int main(int ac, char **av)
 {
-	(void)buff;
-	if (len == -1)
+	info_t info[] = { INFO_INIT };
+	int fd = 2;
+
+	asm ("mov %1, %0\n\t"
+		"add $3, %0"
+		: "=r" (fd)
+		: "r" (fd));
+
+	if (ac == 2)
 	{
-		if (isatty(STDIN_FILENO))
+		fd = open(av[1], O_RDONLY);
+		if (fd == -1)
 		{
-			_puts("\n");
-			free(buff);
-		}
-		exit(0);
-	}
-}
-/**
-  * _isatty - verif if terminal
-  */
-
-void _isatty(void)
-{
-	if (isatty(STDIN_FILENO))
-		_puts("#cisfun$ ");
-}
-/**
- * main - Shell
- * Return: 0 on success
- */
-
-int main(void)
-{
-	ssize_t len = 0;
-	char *buff = NULL, *value, *pathname, **arv;
-	size_t size = 0;
-	list_path *head = '\0';
-	void (*f)(char **);
-
-	signal(SIGINT, sig_handler);
-	while (len != EOF)
-	{
-		_isatty();
-		len = getline(&buff, &size, stdin);
-		_EOF(len, buff);
-		arv = splitstring(buff, " \n");
-		if (!arv || !arv[0])
-			execute(arv);
-		else
-		{
-			value = _getenv("PATH");
-			head = linkpath(value);
-			pathname = _which(arv[0], head);
-			f = checkbuild(arv);
-			if (f)
+			if (errno == EACCES)
+				exit(126);
+			if (errno == ENOENT)
 			{
-				free(buff);
-				f(arv);
+				_eputs(av[0]);
+				_eputs(": 0: Can't open ");
+				_eputs(av[1]);
+				_eputchar('\n');
+				_eputchar(BUF_FLUSH);
+				exit(127);
 			}
-			else if (!pathname)
-				execute(arv);
-			else if (pathname)
-			{
-				free(arv[0]);
-				arv[0] = pathname;
-				execute(arv);
-			}
+			return (EXIT_FAILURE);
 		}
+		info->readfd = fd;
 	}
-	free_list(head);
-	freearv(arv);
-	free(buff);
-	return (0);
+	populate_env_list(info);
+	read_history(info);
+	hsh(info, av);
+	return (EXIT_SUCCESS);
 }
-
